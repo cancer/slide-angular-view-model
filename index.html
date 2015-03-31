@@ -1,0 +1,288 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AngularでViewModelのようなものを作ったら幸せになった</title>
+  <link rel="stylesheet" href="./dist/talkie.min.css">
+  <link rel="stylesheet" href="./dist/talkie-default.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/monokai_sublime.min.css">
+  <style>
+    [layout] pre {
+      font-size: 1.0em;
+      overflow: scroll;
+    }
+
+    [layout] h2 {
+      font-size: 2.4em;
+    }
+
+    [layout] h3 {
+      font-size: 2.0em;
+    }
+  </style>
+</head>
+<body>
+
+<!-- put your slides -->
+
+<template layout="cover" type="text/x-markdown">
+# AngularでViewModelのようなものを作ったら幸せになった
+
+2015/04/01 社内勉強会
+
+[@cancer6](https://twitter.com/cancer6)
+</template>
+
+<template layout="code" type="text/x-markdown">
+## カレンダーで日付選択をするUIを作った時の話
+
+```JavaScript
+app.controller(function($scope) {
+	$scope.uiState.dateSelect = 'monthly';
+
+	// 表示する値
+	$scope.uiValues = {
+		dateFrom: moment().subtract(1, 'year'),
+		dateTo: moment()
+	};
+
+	// 日次と月次を切り替え
+	$scope.changeDateSelect = function(dateSelect) {
+		$scope.uiState.dateSelect = dateSelect;
+	};
+
+	// 日付を選択
+	$scope.changeDate = function(from, to) {
+		$scope.uiValues.dateFrom = from;
+		$scope.uiValues.dateTo = to;
+	};
+});
+```
+</template>
+
+<template layout="code" type="text/x-markdown">
+## Case1. 日次と月次の選択状態はそれぞれ独立させる
+
+```JavaScript
+app.controller(function($scope) {
+	$scope.uiState.dateSelect = 'monthly';
+
+	// 保存用
+	$scope.dateStore = {
+		monthly: {
+  		dateFrom: ...
+  		dateTo: ...
+		},
+		daily: {
+  		dateFrom: ...
+  		dateTo: ...
+		}
+	};
+
+  // dateStoreから表示する値を取得
+	$scope.uiValues = {
+		dateFrom: $scope.dateStore[$scope.uiState.dateSelect].dateFrom,
+		dateTo: $scope.dateStore[$scope.uiState.dateSelect].dateTo
+	};
+
+	$scope.changeDateSelect = function(dateSelect) {
+		$scope.uiState.dateSelect = dateSelect;
+
+		// 表示する値を更新
+		$scope.uiValues.dateFrom = $scope.uiValues[dateSelect].dateFrom;
+		$scope.uiValues.dateTo = $scope.uiValues[dateSelect].dateTo;
+	};
+
+	$scope.changeDate = function(from, to) {
+		$scope.uiValues.dateFrom = from;
+		$scope.uiValues.dateTo = to;
+
+		// 保存用も更新
+		$scope.dateStore[$scope.uiState.dateSelect].dateFrom = from;
+		$scope.dateStore[$scope.uiState.dateSelect].dateTo = to;
+	};
+});
+```
+</template>
+
+<template layout="code" type="text/x-markdown">
+## Case2. 別のタブに切り替えた時も独立させる
+
+```JavaScript
+app.controller(function($scope) {
+	$scope.uiState.tabSelect = 'tabA';
+	$scope.uiState.dateSelect = 'monthly';
+
+	// タブごとに階層作って...
+	$scope.dateStore = {
+      tabA: {
+    		monthly: {
+      		dateFrom: ...
+      		dateTo: ...
+    		},
+    		daily: {
+      		dateFrom: ...
+      		dateTo: ...
+    		}
+      },
+      tabB: {
+      },
+	};
+
+	$scope.uiValues = {
+		dateFrom: $scope.uiValues[$scope.uiState.dateSelect].dateFrom,
+		dateTo: $scope.uiValues[$scope.uiState.dateSelect].dateTo
+	};
+
+	// タブが切り替わった時も日付を更新して...
+	$scope.changeTab = function(tabName) {
+    //
+		// ...
+    //
+	};
+
+	$scope.changeDateSelect = function(dateSelect) {
+		$scope.uiState.dateSelect = dateSelect;
+
+		$scope.uiValues.dateFrom = $scope.uiValues[$scope.uiState.tabSelect][dateSelect].dateFrom;
+		$scope.uiValues.dateTo = $scope.uiValues[$scope.uiState.tabSelect][dateSelect].dateTo;
+	};
+
+	$scope.changeDate = function(from, to) {
+		$scope.uiValues.dateFrom = from;
+		$scope.uiValues.dateTo = to;
+
+		// 保存用も更新
+		$scope.dateStore[$scope.uiState.tabSelect][$scope.uiState.dateSelect].dateFrom = from;
+		$scope.dateStore[$scope.uiState.tabSelect][$scope.uiState.dateSelect].dateTo = to;
+	};
+});
+```
+</template>
+
+<template layout="title" type="text/x-markdown">
+## つらい
+</template>
+
+<template layout="title" invert type="text/x-markdown" backface="http://i.ytimg.com/vi/lMrI-WkOJIU/maxresdefault.jpg"
+backface-filter="brightness(.6)">
+# そうだServiceにしよう
+</template>
+
+<template layout="code" type="text/x-markdown">
+<style>
+  [layout] pre {
+    font-size: 1.0em;
+  }
+</style>
+## dateState ServiceをViewModelっぽく作る
+
+```JavaScript
+angular.factory('dateState', function() {
+	var dateState = {};
+	var defaults = {
+		selected: 'monthly',
+		displayDate: {
+			monthly: {
+				from: moment().subtract(1, 'year'),
+				to: moment()
+			},
+			daily: { ... }
+    }
+	};
+
+	dateState.data = {
+		tabA: _.clone(defaults, true),
+		tabB: _.clone(defaults, true),
+		  :
+	};
+
+	dateState.get = function(tabName) {
+		// なんやかんやして必要なdataを成型する
+		return {
+			selected: selected,
+			displayDate: {
+				from: from,
+				to: to
+			}
+		};
+	};
+
+	dateState.set = function(tabName, obj) {
+		// なんやかんやしてdateState.dataに保存する
+	};
+});
+```
+</template>
+
+<template layout="code" type="text/x-markdown">
+## dateState Serviceを使ってControllerを書き直す
+
+```JavaScript
+app.controller(function($scope) {
+	$scope.uiState.tabSelect = 'tabA';
+
+	// scopeに初期値を保存
+	$scope.dateState = dateState.get($scope.uiState.tabSelect);
+
+	$scope.changeTab = function(tabName) {
+		// タブを変えてscopeを更新
+		$scope.dateState = dateState.get(tabName);
+	};
+
+	$scope.changeDateSelect = function(dateSelect) {
+		// dateState内のデータを更新
+		dateState.set({ selected: dateSelect });
+
+		// scopeを更新
+		$scope.dateState = dateState.get($scope.uiState.tabSelect);
+	};
+
+	$scope.changeDate = function(from, to) {
+		// dateState内のデータを更新
+		dateState.set({
+			displayDate: {
+				from: from,
+				to: to
+			}
+		});
+
+		// scopeを更新
+		$scope.dateState = dateState.get($scope.uiState.tabSelect);
+	};
+});
+```
+</template>
+
+<template layout="bullets" type="text/x-markdown">
+## まとめ
+
+- Angularの場合$scopeがViewModelの役割をするのでControllerに色々突っ込みがち
+- Controllerを綺麗にしたくてもServiceでは$scopeが使えない
+- ServiceにViewのデータとアクセサを持たせることでいい感じにできた
+- Modelの上手な作り方とかがわからないので誰か教えてください
+</template>
+
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="./dist/talkie.js"></script>
+<script>
+var talkie = Talkie({wide: false});
+
+talkie.next.plug(talkie.control.keydown('s'));
+talkie.next.plug(talkie.control.keydown('n'));
+talkie.prev.plug(talkie.control.keydown('a'));
+talkie.prev.plug(talkie.control.keydown('p'));
+
+document.addEventListener('DOMContentLoaded', function() {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('[layout]'));
+  talkie.changed.onValue(function(current) {
+    console.clear();
+    // safari's `console#clear` is async...
+    setTimeout(function() {
+      // print presenter notes
+      console.info(talkie.notes[slides.indexOf(current)]);
+    }, 50);
+  });
+});
+</script>
+</body>
+</html>
